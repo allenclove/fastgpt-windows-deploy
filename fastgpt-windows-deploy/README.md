@@ -1,171 +1,189 @@
-# FastGPT Windows 一键部署工具
+# FastGPT Windows 离线部署工具
+
+## 这是什么
+
+FastGPT 完整 Windows 离线部署包。不需要 Docker、不需要 Linux、不需要虚拟机、不需要联网。克隆下来就能部署。
+
+## 适合谁
+
+- 内网环境，无法访问互联网
+- Windows 10/11 64 位
+- 需要快速搭建 FastGPT 演示环境
+
+## 前置条件
+
+- Windows 10/11 64 位
+- 管理员权限（MongoDB 需要）
+- 硬盘空间 >= 10GB
+- 确保以下端口未被占用：`27017`, `5432`, `6379`, `9000`, `4000`, `4004`
+
+## 一键部署（3 步）
+
+```batch
+:: 步骤 1: 预检查（1 分钟，检查所有依赖是否就绪）
+verify.bat
+
+:: 步骤 2: 安装环境（5 分钟，解压 node_modules、验证 PG 完整性）
+setup.bat
+
+:: 步骤 3: 启动所有服务（3 分钟，自动启动数据库 + FastGPT）
+start.bat
+```
+
+启动成功后浏览器访问 `http://localhost:4000`，用 `root` / `123456` 登录。
+
+## 停止服务
+
+```batch
+stop.bat
+```
 
 ## 目录结构
 
 ```
 fastgpt-windows-deploy/
-├── setup.bat              # 环境安装脚本
-├── start.bat              # 启动所有服务
-├── stop.bat               # 停止所有服务
-├── download-deps.bat      # 依赖下载脚本（有网环境使用）
+├── verify.bat             # 预检查：检查所有依赖是否就绪
+├── setup.bat              # 安装：Node.js + 解压 node_modules + 校验 PG
+├── start.bat              # 启动：依次启动 MongoDB/PG/Redis/MinIO/FastGPT
+├── stop.bat               # 停止：停止所有服务
+├── download-deps.bat      # 下载依赖（有网环境用）
+├── bundle-offline.bat     # 打包离线 ZIP（有网环境用）
 ├── config/
-│   ├── .env               # FastGPT 环境配置
+│   ├── .env               # FastGPT 完整环境变量（已配置好）
 │   ├── mongod.cfg         # MongoDB 配置
 │   └── redis.conf         # Redis 配置
-├── installers/            # 依赖安装包存放目录
-│   ├── node-v20.14.0-x64.msi    # Node.js 安装包
-│   ├── mongodb/                 # MongoDB 便携版
-│   ├── pgsql/                   # PostgreSQL 便携版
-│   ├── redis/                   # Redis Windows 版
-│   ├── minio.exe                # MinIO Windows 版
-│   └── pgvector/                # pgvector 扩展文件
-│       ├── vector.dll
-│       ├── vector.control
-│       └── vector--0.8.0.sql
-├── data/                  # 数据存储目录（自动创建）
+├── installers/            # 所有 Windows 依赖
+│   ├── node-v20.14.0-x64.msi      # Node.js
+│   ├── mongodb/                   # MongoDB 5.0
+│   ├── pgsql/                     # PostgreSQL 15
+│   ├── redis/                     # Redis 5.0 (Windows 移植版)
+│   ├── minio.exe                  # MinIO 对象存储
+│   └── pgvector/                  # pgvector 扩展
+├── scripts/
+│   └── mock-plugin-server.js      # Mock 插件服务
+├── data/                  # 运行时数据目录（自动创建）
 └── logs/                  # 日志目录（自动创建）
 ```
-
-## 快速开始
-
-### 前提条件
-
-- Windows 10/11 64位
-- 建议以管理员身份运行所有脚本
-- 确保端口 27017, 5432, 6379, 9000, 3000 未被占用
-
-### 方式一：有网络环境
-
-```bash
-# 1. 下载所有依赖
-download-deps.bat
-
-# 2. 安装环境
-setup.bat
-
-# 3. 启动所有服务
-start.bat
-```
-
-### 方式二：内网环境（无网络）
-
-1. 在有网络的机器上运行 `download-deps.bat` 下载所有依赖
-2. 将整个 `fastgpt-windows-deploy` 目录复制到内网机器
-3. 运行 `setup.bat` 安装环境
-4. 运行 `start.bat` 启动所有服务
-
-## 所需组件
-
-| 组件 | 用途 | Windows 方案 |
-|------|------|-------------|
-| Node.js 20.x | 运行环境 | node-v20.14.0-x64.msi |
-| pnpm 10.x | 包管理器 | npm install -g pnpm |
-| MongoDB 5.0 | 元数据存储 | mongod.exe (ZIP 便携版) |
-| PostgreSQL 15 | 向量数据库 | pg_ctl.exe (ZIP 便携版) |
-| pgvector 0.8.0 | 向量扩展 | vector.dll |
-| Redis 7.x | 缓存/会话 | Memurai 或 Redis Windows 移植版 |
-| MinIO | 对象存储 | minio.exe |
-
-## 手动下载地址
-
-### Node.js
-https://nodejs.org/dist/v20.14.0/node-v20.14.0-x64.msi
-
-### MongoDB 5.0 (ZIP 版)
-https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-5.0.32.zip
-
-解压后放入 `installers\mongodb\`
-
-### PostgreSQL 15 便携版
-https://www.enterprisedb.com/download-postgresql-binaries
-
-下载 Windows x86-64 版本，解压后放入 `installers\pgsql\`
-
-### pgvector
-https://github.com/pgvector/pgvector/releases
-
-下载 Windows 编译版本，将 DLL 文件放入 `installers\pgvector\`
-
-### Redis Windows 版
-- **Memurai (推荐)**: https://www.memurai.com/get-memurai
-  - 免费开发版，完全兼容 Redis，支持 Windows 服务
-  - 安装后自动检测，无需放入 installers 目录
-- **Redis Windows 移植版**: https://github.com/tporadowski/redis/releases
-  - 下载 `Redis-x64-*.zip`，解压到 `installers\redis\`
-
-### MinIO
-https://dl.min.io/server/minio/release/windows-amd64/minio.exe
-
-放入 `installers\minio.exe`
-
-## 访问方式
-
-- **FastGPT 主应用**: http://localhost:3000
-- **MinIO 控制台**: http://localhost:9001
-- **默认账号**: root / 123456
 
 ## 服务端口
 
 | 服务 | 端口 |
 |------|------|
-| FastGPT | 3000 |
+| FastGPT | 4000 |
 | MongoDB | 27017 |
 | PostgreSQL | 5432 |
 | Redis | 6379 |
 | MinIO API | 9000 |
 | MinIO Console | 9001 |
+| Mock Plugin | 4004 |
 
 ## LLM 模型配置
 
-FastGPT 启动后，需要在管理后台配置 LLM 模型。
+FastGPT 启动后需要配置 AI 模型才能正常对话。登录后在后台管理页面添加模型。
 
-由于内网环境无法直接访问公网 AI API，有以下方案：
+模型配置文件在 `config/.env`，默认已配置了 OpenAI 兼容的 API 端点。修改以下变量即可切换模型：
 
-### 方案一：API 代理
-如果内网有代理可以访问外网 API：
-- 在系统配置中添加 OpenAI 兼容的 API 地址
-- 支持所有兼容 OpenAI API 格式的服务
-
-### 方案二：本地模型
-使用 Ollama 或类似工具运行本地模型：
-- 安装 Ollama Windows 版
-- 在 FastGPT 中配置 Ollama 的 API 地址
-
-### 方案三：配置已有的 AI Proxy
-FastGPT 内置 AI Proxy 模块，可以统一管理多个 AI 服务商的 API Key
-
-## 故障排除
-
-### 端口被占用
-```bash
-# 查看端口占用
-netstat -ano | findstr "27017 5432 6379 9000 3000"
+```ini
+OPENAI_BASE_URL=<你的 API 端点>
+CHAT_API_KEY=<你的 API Key>
+HELPER_BOT_MODEL=<模型名称>
 ```
 
-### MongoDB 无法启动
-1. 检查是否以管理员身份运行
-2. 删除 `data\mongodb` 目录后重试
-3. 检查 `data\mongodb\.initialized` 文件是否存在，如初始化失败请删除此文件
+内网环境若无公网 API，可选择：
+- 从可以访问 API 的机器上代理转发
+- 使用 Ollama 等工具运行本地模型
 
-### PostgreSQL 无法启动
-```bash
-# 手动初始化
-installers\pgsql\bin\initdb.exe -D data\pg -U fastgpt -E UTF8
+## 故障排查
 
-# 手动启动
-installers\pgsql\bin\pg_ctl.exe start -D data\pg -l logs\pg.log
+### 端口 3000 无法使用
+
+Windows Hyper-V 保留了端口 2949-3048。本工具已自动检测并改用 4000。若 4000/4004 也被占用，修改 `config/.env` 中的端口后重试。
+
+### PostgreSQL 初始化失败
+
+```batch
+:: 检查 share 目录完整性（关键！）
+dir installers\pgsql\share
+
+:: 缺失 postgres.bki 说明安装不完整
+:: 重新从 PostgreSQL ZIP 解压 share/ 目录
 ```
 
-### pnpm install 失败
-```bash
-# 清理缓存后重试
-pnpm store prune
-pnpm install --no-frozen-lockfile
+### Redis 连接失败
+
+```
+NOAUTH Authentication required
 ```
 
-### 重置所有数据
-```bash
-# 运行 stop.bat 后，删除 data 目录
+原因：Redis 5.x 不支持用户名认证。`.env` 中 REDIS_URL 格式必须是：
+```
+redis://:password@host:port    （正确）
+redis://user:password@host:port （错误）
+```
+
+### MongoDB 连接失败
+
+确保以管理员身份运行 `start.bat`。MongoDB 需要初始化副本集，首次启动需 10-15 秒。
+
+### 插件服务错误
+
+```
+[plugin_error]: Request failed
+```
+
+原因：FastGPT 启动时必须连接插件服务。本工具已包含 Mock 插件服务（自动启动在 4004 端口）。若该服务未启动，手动运行：
+
+```batch
+node scripts\mock-plugin-server.js
+```
+
+### 完全重置
+
+```batch
+stop.bat
 rmdir /S /Q data
-# 重新运行 start.bat 会自动初始化
+start.bat
 ```
+
+## AI 辅助部署说明
+
+如果你是一个 AI 模型，正在帮助用户部署本项目，请按以下顺序操作：
+
+### 1. 环境检查
+
+运行 `verify.bat`，解读输出。如果所有项都是 `[OK]`，继续下一步。如果有 `[FAIL]`，根据提示修复。
+
+### 2. 首次安装
+
+运行 `setup.bat`。此脚本会：
+- 安装 Node.js（调用 MSI）
+- 安装 pnpm（npm install -g pnpm）
+- 从分卷压缩包解压 node_modules（`cat node_modules.tar.gz.part* | tar -xzf -`）
+- 校验 PostgreSQL share 目录完整性
+- 配置 pgvector 扩展
+
+### 3. 启动服务
+
+运行 `start.bat`。此脚本按顺序：
+1. 启动 MongoDB（初始化副本集 + 创建 fastgpt 用户）
+2. 启动 PostgreSQL（initdb + 安装 pgvector 扩展）
+3. 启动 Redis
+4. 启动 MinIO
+5. 启动 Mock 插件服务
+6. 初始化 MinIO 存储桶
+7. 启动 FastGPT（`PORT=4000 pnpm dev`）
+
+### 4. 验证
+
+访问 `http://localhost:4000`，应返回 FastGPT 登录页面。
+
+### 5. LLM 配置
+
+引导用户在管理后台添加 AI 模型配置。`config/.env` 中的配置会自动生效，也可在 UI 中手动添加。
+
+### 已知问题
+
+- `Windows 保留端口 2949-3048`：start.bat 自动检测并避开
+- `Redis NOAUTH`：.env 已使用正确格式 `redis://:password@host`
+- `PostgreSQL share 缺失`：setup.bat 自动校验完整性
+- `插件 fetch failed`：start.bat 自动启动 mock 插件服务
