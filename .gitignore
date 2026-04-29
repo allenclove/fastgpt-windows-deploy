@@ -1,6 +1,8 @@
-# Dependencies
+# Dependencies (archived into parts for git)
 fastgpt-source/node_modules/
 fastgpt-source/.pnpm-store/
+# Allow archive parts
+!fastgpt-source/node_modules.tar.gz.part*
 
 # Data directories (generated at runtime)
 fastgpt-windows-deploy/data/
@@ -21,3 +23,4 @@ Desktop.ini
 
 # Debug symbol files
 *.pdb
+.claude/
