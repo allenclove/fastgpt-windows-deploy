@@ -127,6 +127,26 @@ if %PG_INSTALLED% equ 0 (
 )
 
 if %PG_INSTALLED% equ 1 (
+    echo   检查 PostgreSQL share 目录完整性...
+    set "PG_SHARE_OK=1"
+    for %%d in (extension timezone timezonesets tsearch_data) do (
+        if not exist "!PSQL_PATH!..\share\%%d" (
+            echo   [ERROR] PostgreSQL share\%%d 目录缺失！
+            set "PG_SHARE_OK=0"
+        )
+    )
+    if not exist "!PSQL_PATH!..\share\postgres.bki" (
+        echo   [ERROR] postgres.bki 缺失！
+        set "PG_SHARE_OK=0"
+    )
+    if !PG_SHARE_OK! equ 0 (
+        echo   [ERROR] PostgreSQL 安装不完整，请重新解压 PostgreSQL ZIP
+        echo   确保 pgsql\share\ 目录包含: extension, timezone, timezonesets, tsearch_data
+        pause
+        exit /b 1
+    )
+    echo   PostgreSQL share 目录完整
+
     echo   检查 pgvector 扩展...
     :: 检查 pgvector 是否已安装
     if exist "%INSTALLERS_DIR%\pgvector\vector.dll" (

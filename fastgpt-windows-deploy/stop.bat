@@ -14,9 +14,10 @@ set "DATA_DIR=%FASTGPT_ROOT%\data"
 
 echo 正在停止所有 FastGPT 相关服务...
 
-:: 停止 FastGPT (Node.js)
-echo   停止 FastGPT 应用...
+:: 停止 FastGPT (Node.js) + Mock Plugin
+echo   停止 FastGPT 应用和 Mock 插件...
 taskkill /F /FI "WINDOWTITLE eq FastGPT*" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq FastGPT-MockPlugin*" >nul 2>&1
 taskkill /F /IM node.exe >nul 2>&1
 
 :: 停止 MinIO
