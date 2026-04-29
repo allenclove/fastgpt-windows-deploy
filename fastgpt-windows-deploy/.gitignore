@@ -1,0 +1,5 @@
+data/
+logs/
+temp_downloads/
+fastgpt-offline-pkg/
+*.zip

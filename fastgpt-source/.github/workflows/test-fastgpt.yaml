@@ -1,0 +1,72 @@
+name: "FastGPT-Test"
+on:
+  pull_request:
+  workflow_dispatch:
+
+    # Only one build per PR branch at a time
+concurrency:
+  group: "test-fastgpt-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  # Required to checkout the code
+  contents: read
+  # Required to put a comment into the pull-request
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name ||
+            github.repository }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: "Install Deps"
+        run: pnpm install --frozen-lockfile
+
+      - name: "Test Global"
+        run: pnpm test:global
+
+      - name: "Test Service"
+        run: pnpm test:service
+
+      - name: "Test App"
+        run: pnpm test:app
+
+      - name: "Report Coverage (Global)"
+        # Set if: always() to also generate the report if tests are failing
+        # Only works if you set `reportOnFailure: true` in your vite config as specified above
+        if: always() && hashFiles('packages/global/coverage/coverage-summary.json') != ''
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          name: global
+          json-final-path: packages/global/coverage/coverage-final.json
+          json-summary-path: packages/global/coverage/coverage-summary.json
+
+      - name: "Report Coverage (Service)"
+        if: always() && hashFiles('packages/service/coverage/coverage-summary.json') != ''
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          name: service
+          json-final-path: packages/service/coverage/coverage-final.json
+          json-summary-path: packages/service/coverage/coverage-summary.json
+
+      - name: "Report Coverage (App)"
+        if: always() && hashFiles('projects/app/coverage/coverage-summary.json') != ''
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          name: app
+          json-final-path: projects/app/coverage/coverage-final.json
+          json-summary-path: projects/app/coverage/coverage-summary.json

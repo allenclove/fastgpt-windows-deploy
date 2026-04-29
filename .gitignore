@@ -1,0 +1,23 @@
+# Dependencies
+fastgpt-source/node_modules/
+fastgpt-source/.pnpm-store/
+
+# Data directories (generated at runtime)
+fastgpt-windows-deploy/data/
+fastgpt-windows-deploy/logs/
+
+# Temp files
+fastgpt-windows-deploy/temp_downloads/
+fastgpt-offline-pkg/
+*.zip
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Debug symbol files
+*.pdb

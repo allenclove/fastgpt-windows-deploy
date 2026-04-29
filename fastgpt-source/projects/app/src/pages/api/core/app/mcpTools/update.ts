@@ -1,0 +1,63 @@
+import type { ApiRequestProps, ApiResponseType } from '@fastgpt/service/type/next';
+import { NextAPI } from '@/service/middleware/entry';
+import { authApp } from '@fastgpt/service/support/permission/app/auth';
+import { ManagePermissionVal } from '@fastgpt/global/support/permission/constant';
+import { mongoSessionRun } from '@fastgpt/service/common/mongo/sessionRun';
+import { MongoApp } from '@fastgpt/service/core/app/schema';
+
+import { getMCPToolSetRuntimeNode } from '@fastgpt/global/core/app/tool/mcpTool/utils';
+import { MongoAppVersion } from '@fastgpt/service/core/app/version/schema';
+import { storeSecretValue } from '@fastgpt/service/common/secret/utils';
+import { updateParentFoldersUpdateTime } from '@fastgpt/service/core/app/controller';
+import {
+  UpdateMcpToolsBodySchema,
+  type UpdateMcpToolsBodyType
+} from '@fastgpt/global/openapi/core/app/mcpTools/api';
+import { assertMCPUrlNotInternal } from '@fastgpt/service/core/app/mcp';
+
+export type updateMCPToolsQuery = {};
+
+async function handler(req: ApiRequestProps<UpdateMcpToolsBodyType>, res: ApiResponseType) {
+  const { appId, url, toolList, headerSecret } = UpdateMcpToolsBodySchema.parse(req.body);
+  const { app } = await authApp({ req, authToken: true, appId, per: ManagePermissionVal });
+
+  await assertMCPUrlNotInternal(url);
+
+  const formatedHeaderAuth = storeSecretValue(headerSecret);
+
+  // create tool set node
+  const toolSetRuntimeNode = getMCPToolSetRuntimeNode({
+    url,
+    toolList,
+    headerSecret: formatedHeaderAuth,
+    name: app.name,
+    avatar: app.avatar
+  });
+
+  await mongoSessionRun(async (session) => {
+    // update app and app version
+    await MongoApp.updateOne(
+      { _id: appId },
+      {
+        modules: [toolSetRuntimeNode],
+        updateTime: new Date()
+      },
+      { session }
+    );
+
+    await MongoAppVersion.updateOne(
+      { appId },
+      {
+        $set: {
+          nodes: [toolSetRuntimeNode]
+        }
+      },
+      { session }
+    );
+  });
+  updateParentFoldersUpdateTime({
+    parentId: app.parentId
+  });
+}
+
+export default NextAPI(handler);
