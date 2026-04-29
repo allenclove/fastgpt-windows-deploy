@@ -233,13 +233,32 @@ if not exist "%SOURCE_DIR%" (
 echo   配置环境变量...
 copy /Y "%FASTGPT_ROOT%\config\.env" "%SOURCE_DIR%\projects\app\.env" >nul
 
-:: 安装依赖 (使用 pnpm)
-echo   安装 npm 依赖 (首次可能需要较长时间)...
 cd /d "%SOURCE_DIR%"
-pnpm install --prefer-offline 2>&1 | findstr /V "Progress:"
 
-if %errorlevel% neq 0 (
-    echo   [WARNING] pnpm install 可能未完全成功，尝试继续...
+:: 检查是否有离线 node_modules 分卷压缩包
+set "ARCHIVE_EXTRACTED=0"
+if exist "node_modules.tar.gz.partaa" (
+    echo   检测到离线 node_modules 分卷压缩包，正在合并解压...
+    echo   这可能需要几分钟时间...
+    cat node_modules.tar.gz.part* | tar -xzf - 2>&1
+    if !errorlevel! equ 0 (
+        set "ARCHIVE_EXTRACTED=1"
+        echo   [OK] node_modules 解压完成
+    ) else (
+        echo   [WARNING] 解压失败，尝试 pnpm install 方式...
+    )
+)
+
+if %ARCHIVE_EXTRACTED% equ 0 (
+    if exist "node_modules\.pnpm" (
+        echo   node_modules 已存在，跳过安装
+    ) else (
+        echo   安装 npm 依赖 (首次可能需要较长时间)...
+        pnpm install --prefer-offline 2>&1 | findstr /V "Progress:"
+        if !errorlevel! neq 0 (
+            echo   [WARNING] pnpm install 可能未完全成功，尝试继续...
+        )
+    )
 )
 
 :: 构建 SDK 包
