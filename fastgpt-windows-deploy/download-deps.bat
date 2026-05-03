@@ -42,7 +42,7 @@ if not defined DL_CMD (
 :: 1. Node.js 20.14.0
 :: =============================================================
 echo.
-echo [1/7] 下载 Node.js 20.14.0...
+echo [1/8] 下载 Node.js 20.14.0...
 set "NODE_URL=https://nodejs.org/dist/v20.14.0/node-v20.14.0-x64.msi"
 set "NODE_FILE=%INSTALLERS%\node-v20.14.0-x64.msi"
 
@@ -63,7 +63,7 @@ if exist "%NODE_FILE%" (
 :: 2. MongoDB 5.0 Community Server
 :: =============================================================
 echo.
-echo [2/7] 下载 MongoDB 5.0 Windows ZIP...
+echo [2/8] 下载 MongoDB 5.0 Windows ZIP...
 set "MONGO_URL=https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-5.0.32.zip"
 set "MONGO_FILE=%TEMP_DL%\mongodb-windows-x86_64-5.0.32.zip"
 
@@ -83,6 +83,7 @@ if exist "%INSTALLERS%\mongodb\bin\mongod.exe" (
             xcopy /E /Y "%%d\*" "%INSTALLERS%\mongodb\" >nul
         )
         echo   [OK] MongoDB 解压完成
+        echo   [INFO] MongoDB 5.0 使用 mongo.exe (legacy shell)，非 mongosh.exe
     ) else (
         echo   [FAILED] 下载失败
         echo   手动下载: https://www.mongodb.com/try/download/community
@@ -94,7 +95,7 @@ if exist "%INSTALLERS%\mongodb\bin\mongod.exe" (
 :: 3. PostgreSQL 15 Windows
 :: =============================================================
 echo.
-echo [3/7] 下载 PostgreSQL 15 Windows ZIP...
+echo [3/8] 下载 PostgreSQL 15 Windows ZIP...
 set "PG_URL=https://get.enterprisedb.com/postgresql/postgresql-15.15-1-windows-x64-binaries.zip"
 set "PG_FILE=%TEMP_DL%\postgresql-15-windows-x64.zip"
 
@@ -130,7 +131,7 @@ if exist "%INSTALLERS%\pgsql\bin\psql.exe" (
 :: 4. pgvector Windows DLL
 :: =============================================================
 echo.
-echo [4/7] 下载 pgvector Windows 扩展...
+echo [4/8] 下载 pgvector Windows 扩展...
 
 if exist "%INSTALLERS%\pgvector\vector.dll" (
     echo   已存在，跳过
@@ -155,10 +156,10 @@ if exist "%INSTALLERS%\pgvector\vector.dll" (
 )
 
 :: =============================================================
-:: 5. Redis for Windows (Memurai)
+:: 5. Redis for Windows
 :: =============================================================
 echo.
-echo [5/7] 下载 Redis Windows 版...
+echo [5/8] 下载 Redis Windows 版...
 
 if exist "%INSTALLERS%\redis\redis-server.exe" (
     echo   已存在，跳过
@@ -179,12 +180,20 @@ if exist "%INSTALLERS%\redis\redis-server.exe" (
 :: 6. MinIO Windows
 :: =============================================================
 echo.
-echo [6/7] 下载 MinIO Windows 版...
+echo [6/8] 下载 MinIO Windows 版...
 set "MINIO_URL=https://dl.min.io/server/minio/release/windows-amd64/minio.exe"
 set "MINIO_FILE=%INSTALLERS%\minio.exe"
 
 if exist "%MINIO_FILE%" (
-    echo   已存在，跳过
+    :: Check if it's a real binary (not a Git LFS pointer)
+    for %%f in ("%MINIO_FILE%") do (
+        if %%~zf lss 1000 (
+            echo   现有文件是 Git LFS 指针，重新下载...
+            %DL_CMD% "%MINIO_FILE%" "%MINIO_URL%"
+        ) else (
+            echo   已存在，跳过
+        )
+    )
 ) else (
     echo   正在下载 MinIO (~100MB)...
     %DL_CMD% "%MINIO_FILE%" "%MINIO_URL%"
@@ -201,7 +210,7 @@ if exist "%MINIO_FILE%" (
 :: 7. pnpm (全局安装)
 :: =============================================================
 echo.
-echo [7/7] 检查 pnpm...
+echo [7/8] 检查 pnpm...
 where pnpm >nul 2>&1
 if %errorlevel% neq 0 (
     echo   pnpm 未安装
@@ -213,6 +222,23 @@ if %errorlevel% neq 0 (
     echo   运行: npm install -g pnpm-*.tgz
 ) else (
     for /f "tokens=*" %%i in ('pnpm -v') do echo   pnpm 版本: %%i
+)
+
+:: =============================================================
+:: 8. FastGPT node_modules (离线打包)
+:: =============================================================
+echo.
+echo [8/8] 检查 FastGPT node_modules...
+if exist "%ROOT%\..\fastgpt-source" (
+    if not exist "%ROOT%\..\fastgpt-source\node_modules\.pnpm" (
+        echo   FastGPT 源码存在但 node_modules 未安装
+        echo   建议运行 bundle-offline.bat 生成离线部署包
+    ) else (
+        echo   node_modules 已存在
+    )
+) else (
+    echo   [INFO] fastgpt-source 目录不存在
+    echo   请先克隆 FastGPT 源码: git clone https://github.com/labring/FastGPT.git fastgpt-source
 )
 
 :: =============================================================

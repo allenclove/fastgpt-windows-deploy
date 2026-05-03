@@ -1,5 +1,7 @@
 @echo off
 chcp 65001 >nul
+setlocal enabledelayedexpansion
+
 title FastGPT - 停止所有服务
 
 echo.
@@ -18,7 +20,7 @@ echo 正在停止所有 FastGPT 相关服务...
 echo   停止 FastGPT 应用和 Mock 插件...
 taskkill /F /FI "WINDOWTITLE eq FastGPT*" >nul 2>&1
 taskkill /F /FI "WINDOWTITLE eq FastGPT-MockPlugin*" >nul 2>&1
-taskkill /F /IM node.exe >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq MongoDB-Init*" >nul 2>&1
 
 :: 停止 MinIO
 echo   停止 MinIO...
@@ -43,7 +45,7 @@ if not defined PG_CTL_PATH (
 
 if defined PG_CTL_PATH (
     "%PG_CTL_PATH%" stop -D "%DATA_DIR%\pg" -m fast >nul 2>&1
-    if %errorlevel% equ 0 (
+    if !errorlevel! equ 0 (
         echo   PostgreSQL 已停止
     )
 ) else (
@@ -53,7 +55,6 @@ if defined PG_CTL_PATH (
 :: 停止 MongoDB
 echo   停止 MongoDB...
 taskkill /F /FI "WINDOWTITLE eq FastGPT-MongoDB*" >nul 2>&1
-taskkill /F /FI "WINDOWTITLE eq MongoDB-Init*" >nul 2>&1
 taskkill /F /IM mongod.exe >nul 2>&1
 
 echo.

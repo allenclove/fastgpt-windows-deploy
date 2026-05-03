@@ -40,11 +40,11 @@ set "PIDS="
 :: =============================================================
 :: 1. 启动 MongoDB
 :: =============================================================
-echo [1/6] 启动 MongoDB...
+echo [1/7] 启动 MongoDB...
 
 :: 检查 MongoDB 是否已在运行
-curl -s http://127.0.0.1:27017 >nul 2>&1
-if %errorlevel% equ 0 (
+powershell -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 27017); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
+if !errorlevel! equ 0 (
     echo   MongoDB 已在运行中
     goto :mongo_done
 )
@@ -62,6 +62,20 @@ if not defined MONGOD_PATH (
     goto :mongo_done
 )
 
+:: 查找 mongo shell (mongosh 或 legacy mongo)
+set "MONGO_SHELL_PATH="
+if exist "%INSTALLERS_DIR%\mongodb\bin\mongosh.exe" (
+    set "MONGO_SHELL_PATH=%INSTALLERS_DIR%\mongodb\bin\mongosh.exe"
+) else (
+    if exist "%INSTALLERS_DIR%\mongodb\bin\mongo.exe" (
+        set "MONGO_SHELL_PATH=%INSTALLERS_DIR%\mongodb\bin\mongo.exe"
+    )
+)
+where mongosh >nul 2>&1 && for /f "delims=" %%i in ('where mongosh') do set "MONGO_SHELL_PATH=%%i"
+if not defined MONGO_SHELL_PATH (
+    where mongo >nul 2>&1 && for /f "delims=" %%i in ('where mongo') do set "MONGO_SHELL_PATH=%%i"
+)
+
 :: 检查是否是首次运行 (需要初始化副本集)
 set "NEED_INIT_MONGO=0"
 if not exist "%DATA_DIR%\mongodb\.initialized" set "NEED_INIT_MONGO=1"
@@ -69,6 +83,15 @@ if not exist "%DATA_DIR%\mongodb\.initialized" set "NEED_INIT_MONGO=1"
 :: 先尝试无认证启动以初始化
 if %NEED_INIT_MONGO% equ 1 (
     echo   首次运行，正在初始化 MongoDB 副本集...
+
+    :: 生成 keyFile (副本集认证必需)
+    if not exist "%DATA_DIR%\mongodb.key" (
+        echo   生成 MongoDB keyFile...
+        openssl rand -base64 128 > "%DATA_DIR%\mongodb.key" 2>nul
+        if !errorlevel! neq 0 (
+            node -e "console.log(require('crypto').randomBytes(96).toString('base64'))" > "%DATA_DIR%\mongodb.key"
+        )
+    )
 
     :: 启动 MongoDB (无认证模式)
     start "MongoDB-Init" /MIN "%MONGOD_PATH%" --dbpath "%DATA_DIR%\mongodb" --logpath "%LOG_DIR%\mongodb-init.log" --replSet rs0 --port 27017 --bind_ip 127.0.0.1
@@ -79,19 +102,25 @@ if %NEED_INIT_MONGO% equ 1 (
     timeout /t 5 >nul
 
     :: 初始化副本集
-    "%MONGOD_PATH:~0,-10%mongosh.exe" --quiet --eval "rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27017'}]})" 127.0.0.1:27017/admin >nul 2>&1
-    if errorlevel 1 (
-        echo   [INFO] 副本集可能已初始化
-    )
+    if defined MONGO_SHELL_PATH (
+        echo   初始化副本集...
+        "%MONGO_SHELL_PATH%" --quiet --eval "rs.initiate({_id:'rs0',members:[{_id:0,host:'127.0.0.1:27017'}]})" 127.0.0.1:27017/admin >nul 2>&1
+        if errorlevel 1 (
+            echo   [INFO] 副本集可能已初始化
+        )
 
-    :: 等待副本集生效
-    timeout /t 3 >nul
+        :: 等待副本集生效
+        timeout /t 3 >nul
 
-    :: 创建管理员用户
-    echo   创建数据库用户...
-    "%MONGOD_PATH:~0,-10%mongosh.exe" --quiet --eval "db.getSiblingDB('admin').createUser({user:'fastgpt',pwd:'fastgpt123',roles:['root']})" 127.0.0.1:27017/admin >nul 2>&1
-    if errorlevel 1 (
-        echo   [INFO] 用户可能已存在
+        :: 创建管理员用户
+        echo   创建数据库用户...
+        "%MONGO_SHELL_PATH%" --quiet --eval "db.getSiblingDB('admin').createUser({user:'fastgpt',pwd:'fastgpt123',roles:['root']})" 127.0.0.1:27017/admin >nul 2>&1
+        if errorlevel 1 (
+            echo   [INFO] 用户可能已存在
+        )
+    ) else (
+        echo   [WARNING] MongoDB shell 未找到，无法初始化副本集
+        echo   请手动初始化或确保 mongosh/mongo 在 PATH 中
     )
 
     :: 停止无认证的 MongoDB
@@ -103,17 +132,23 @@ if %NEED_INIT_MONGO% equ 1 (
     echo   MongoDB 初始化完成
 )
 
-:: 启动 MongoDB (认证模式)
+:: 启动 MongoDB (认证模式 + keyFile)
 echo   启动 MongoDB 服务...
-start "FastGPT-MongoDB" /MIN "%MONGOD_PATH%" --config "%CONFIG_DIR%\mongod.cfg" --logpath "%LOG_DIR%\mongodb.log" --dbpath "%DATA_DIR%\mongodb"
-set "MONGO_PID=%ERRORLEVEL%"
+start "FastGPT-MongoDB" /MIN "%MONGOD_PATH%" --dbpath "%DATA_DIR%\mongodb" --logpath "%LOG_DIR%\mongodb.log" --replSet rs0 --port 27017 --bind_ip 127.0.0.1 --auth --keyFile "%DATA_DIR%\mongodb.key"
 set "PIDS=%PIDS% mongod"
 
 :: 等待 MongoDB 就绪
 echo   等待 MongoDB 就绪...
 set "MONGO_READY=0"
 for /L %%i in (1,1,30) do (
-    "%MONGOD_PATH:~0,-10%mongosh.exe" --quiet -u fastgpt -p fastgpt123 --authenticationDatabase admin --eval "db.adminCommand('ping')" 127.0.0.1:27017/admin >nul 2>&1
+    if defined MONGO_SHELL_PATH (
+        "%MONGO_SHELL_PATH%" --quiet -u fastgpt -p fastgpt123 --authenticationDatabase admin --eval "db.adminCommand('ping')" 127.0.0.1:27017/admin >nul 2>&1
+        if !errorlevel! equ 0 (
+            set "MONGO_READY=1"
+            goto :mongo_ready
+        )
+    )
+    powershell -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 27017); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
     if !errorlevel! equ 0 (
         set "MONGO_READY=1"
         goto :mongo_ready
@@ -133,11 +168,14 @@ echo.
 :: =============================================================
 :: 2. 启动 PostgreSQL
 :: =============================================================
-echo [2/6] 启动 PostgreSQL...
+echo [2/7] 启动 PostgreSQL...
 
 :: 检查 PostgreSQL 是否已在运行
-curl -s http://127.0.0.1:5432 >nul 2>&1
-set "PG_RUNNING=0"
+powershell -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 5432); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
+if !errorlevel! equ 0 (
+    echo   PostgreSQL 已在运行中
+    goto :pg_done
+)
 
 set "PG_CTL_PATH="
 where pg_ctl >nul 2>&1 && for /f "delims=" %%i in ('where pg_ctl') do set "PG_CTL_PATH=%%i"
@@ -157,7 +195,7 @@ if not defined PG_CTL_PATH (
 :: 检查数据目录是否已初始化
 if not exist "%DATA_DIR%\pg\PG_VERSION" (
     echo   首次运行，初始化 PostgreSQL 数据目录...
-    "%PG_CTL_PATH:~0,-10%initdb.exe" -D "%DATA_DIR%\pg" -U fastgpt --auth-host=scram-sha-256 --auth-local=scram-sha-256 -E UTF8 >nul 2>&1
+    "%INSTALLERS_DIR%\pgsql\bin\initdb.exe" -D "%DATA_DIR%\pg" -U fastgpt --auth-host=scram-sha-256 --auth-local=scram-sha-256 -E UTF8 >nul 2>&1
     if !errorlevel! neq 0 (
         echo   [WARNING] PostgreSQL 初始化失败
         goto :pg_done
@@ -174,16 +212,16 @@ set "PIDS=%PIDS% postgres"
 echo   等待 PostgreSQL 就绪...
 set "PG_READY=0"
 for /L %%i in (1,1,30) do (
-    "%PG_CTL_PATH:~0,-10%psql.exe" -U fastgpt -d postgres -h 127.0.0.1 -p 5432 -c "SELECT 1" >nul 2>&1
+    "%INSTALLERS_DIR%\pgsql\bin\psql.exe" -U fastgpt -d postgres -h 127.0.0.1 -p 5432 -c "SELECT 1" >nul 2>&1
     if !errorlevel! equ 0 (
         set "PG_READY=1"
         goto :pg_ready
     )
     :: 如果认证失败，尝试先创建用户
-    "%PG_CTL_PATH:~0,-10%psql.exe" -U postgres -d postgres -h 127.0.0.1 -p 5432 -c "SELECT 1" >nul 2>&1
+    "%INSTALLERS_DIR%\pgsql\bin\psql.exe" -U postgres -d postgres -h 127.0.0.1 -p 5432 -c "SELECT 1" >nul 2>&1
     if !errorlevel! equ 0 (
         echo   创建 fastgpt 用户...
-        "%PG_CTL_PATH:~0,-10%psql.exe" -U postgres -d postgres -h 127.0.0.1 -p 5432 -c "CREATE ROLE fastgpt WITH LOGIN PASSWORD 'fastgpt123' SUPERUSER;" >nul 2>&1
+        "%INSTALLERS_DIR%\pgsql\bin\psql.exe" -U postgres -d postgres -h 127.0.0.1 -p 5432 -c "CREATE ROLE fastgpt WITH LOGIN PASSWORD 'fastgpt123' SUPERUSER;" >nul 2>&1
         set "PG_READY=1"
         goto :pg_ready
     )
@@ -194,7 +232,7 @@ if %PG_READY% equ 0 (
     echo   [WARNING] PostgreSQL 可能未完全就绪，继续...
 ) else (
     :: 创建 pgvector 扩展
-    "%PG_CTL_PATH:~0,-10%psql.exe" -U fastgpt -d postgres -h 127.0.0.1 -p 5432 -c "CREATE EXTENSION IF NOT EXISTS vector;" >nul 2>&1
+    "%INSTALLERS_DIR%\pgsql\bin\psql.exe" -U fastgpt -d postgres -h 127.0.0.1 -p 5432 -c "CREATE EXTENSION IF NOT EXISTS vector;" >nul 2>&1
     echo   PostgreSQL 就绪 (127.0.0.1:5432)
 )
 
@@ -204,10 +242,10 @@ echo.
 :: =============================================================
 :: 3. 启动 Redis
 :: =============================================================
-echo [3/6] 启动 Redis...
+echo [3/7] 启动 Redis...
 
-curl -s http://127.0.0.1:6379 >nul 2>&1
-if %errorlevel% equ 0 (
+powershell -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 6379); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
+if !errorlevel! equ 0 (
     echo   Redis 已在运行中
     goto :redis_done
 )
@@ -247,14 +285,23 @@ echo.
 :: =============================================================
 :: 4. 启动 MinIO
 :: =============================================================
-echo [4/6] 启动 MinIO (对象存储)...
+echo [4/7] 启动 MinIO (对象存储)...
 
 set "MINIO_PATH="
 where minio >nul 2>&1 && for /f "delims=" %%i in ('where minio') do set "MINIO_PATH=%%i"
 
 if not defined MINIO_PATH (
     if exist "%INSTALLERS_DIR%\minio.exe" (
-        set "MINIO_PATH=%INSTALLERS_DIR%\minio.exe"
+        :: Check if minio.exe is a real binary (not a Git LFS pointer)
+        for %%f in ("%INSTALLERS_DIR%\minio.exe") do (
+            if %%~zf lss 1000 (
+                echo   [ERROR] minio.exe 是 Git LFS 指针文件，无法启动
+                echo   请先运行: git lfs pull 或手动下载 MinIO
+                goto :minio_done
+            ) else (
+                set "MINIO_PATH=%INSTALLERS_DIR%\minio.exe"
+            )
+        )
     )
 )
 
@@ -310,7 +357,7 @@ if not exist "%DATA_DIR%\.db_initialized" (
     echo   首次运行，执行数据库初始化...
 
     :: 创建 MinIO buckets (如果 MinIO 已启动)
-    curl -s http://127.0.0.1:9000 >nul 2>&1
+    powershell -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 9000); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
     if !errorlevel! equ 0 (
         echo   创建 MinIO 存储桶...
         curl -s -X PUT "http://127.0.0.1:9000/fastgpt-public" >nul 2>&1

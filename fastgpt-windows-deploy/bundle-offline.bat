@@ -18,7 +18,7 @@ set "PKG_DIR=%ROOT%\..\fastgpt-offline-pkg"
 
 if not exist "%SOURCE%" (
     echo [ERROR] fastgpt-source 目录不存在
-    echo 请先运行: git clone git@github.com:labring/FastGPT.git fastgpt-source
+    echo 请先运行: git clone https://github.com/labring/FastGPT.git fastgpt-source
     pause
     exit /b 1
 )
@@ -59,7 +59,7 @@ mkdir "%PKG_DIR%"
 mkdir "%PKG_DIR%\fastgpt-source"
 mkdir "%PKG_DIR%\fastgpt-windows-deploy"
 
-:: 复制 fastgpt-source (排除 .git 以减小体积)
+:: 复制 fastgpt-source (排除 .git 和 .pnpm-store 以减小体积)
 echo   复制源码 (排除 .git)...
 robocopy "%SOURCE%" "%PKG_DIR%\fastgpt-source" /E /NFL /NDL /XD ".git" ".pnpm-store" /XF ".gitignore" ".gitmodules"
 
@@ -71,7 +71,7 @@ if exist "%PNPM_STORE_PATH%" (
 
 :: 复制部署工具
 echo   复制部署工具...
-robocopy "%ROOT%" "%PKG_DIR%\fastgpt-windows-deploy" /E /NFL /NDL /XD "temp_downloads"
+robocopy "%ROOT%" "%PKG_DIR%\fastgpt-windows-deploy" /E /NFL /NDL /XD "temp_downloads" "data" "logs"
 
 :: 创建 .npmrc 指向本地 store
 echo store-dir=./.pnpm-store > "%PKG_DIR%\fastgpt-source\.npmrc"

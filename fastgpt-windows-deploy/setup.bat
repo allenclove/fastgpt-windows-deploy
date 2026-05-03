@@ -27,7 +27,6 @@ if not exist "%DATA_DIR%\mongodb" mkdir "%DATA_DIR%\mongodb"
 if not exist "%DATA_DIR%\pg" mkdir "%DATA_DIR%\pg"
 if not exist "%DATA_DIR%\redis" mkdir "%DATA_DIR%\redis"
 if not exist "%DATA_DIR%\minio" mkdir "%DATA_DIR%\minio"
-if not exist "%DATA_DIR%\logs" mkdir "%DATA_DIR%\logs"
 
 :: 检查 Node.js
 echo 检查 Node.js...
@@ -83,17 +82,13 @@ if %MONGO_INSTALLED% equ 0 (
     echo.
 )
 
-:: 初始化 MongoDB 副本集
-if %MONGO_INSTALLED% equ 1 (
-    echo   初始化 MongoDB 配置...
-
-    :: 确保数据目录存在
-    if not exist "%DATA_DIR%\mongodb" mkdir "%DATA_DIR%\mongodb"
-    if not exist "%DATA_DIR%\logs" mkdir "%DATA_DIR%\logs"
-
-    :: 生成 MongoDB KeyFile (副本集认证用)
-    if not exist "%DATA_DIR%\mongodb.key" (
-        powershell -Command "[System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(128))" > "%DATA_DIR%\mongodb.key"
+:: 生成 MongoDB KeyFile (副本集认证用)
+if not exist "%DATA_DIR%\mongodb.key" (
+    echo   生成 MongoDB keyFile...
+    openssl rand -base64 128 > "%DATA_DIR%\mongodb.key" 2>nul
+    if !errorlevel! neq 0 (
+        :: Fallback: use node to generate random bytes
+        node -e "console.log(require('crypto').randomBytes(96).toString('base64'))" > "%DATA_DIR%\mongodb.key"
     )
 )
 
@@ -120,7 +115,6 @@ if %PG_INSTALLED% equ 0 (
     echo   或者下载 PostgreSQL 15 Windows ZIP 版放入 installers\pgsql\
     echo.
 
-    :: 检查是否有 pgvector DLL 需要安装
     if exist "%INSTALLERS_DIR%\pgvector\vector.dll" (
         echo   检测到 pgvector DLL，安装 PostgreSQL 后将自动配置 pgvector
     )
@@ -129,13 +123,14 @@ if %PG_INSTALLED% equ 0 (
 if %PG_INSTALLED% equ 1 (
     echo   检查 PostgreSQL share 目录完整性...
     set "PG_SHARE_OK=1"
+    set "PG_SHARE_DIR=%INSTALLERS_DIR%\pgsql\share"
     for %%d in (extension timezone timezonesets tsearch_data) do (
-        if not exist "!PSQL_PATH!..\share\%%d" (
+        if not exist "!PG_SHARE_DIR!\%%d" (
             echo   [ERROR] PostgreSQL share\%%d 目录缺失！
             set "PG_SHARE_OK=0"
         )
     )
-    if not exist "!PSQL_PATH!..\share\postgres.bki" (
+    if not exist "!PG_SHARE_DIR!\postgres.bki" (
         echo   [ERROR] postgres.bki 缺失！
         set "PG_SHARE_OK=0"
     )
@@ -151,21 +146,19 @@ if %PG_INSTALLED% equ 1 (
     :: 检查 pgvector 是否已安装
     if exist "%INSTALLERS_DIR%\pgvector\vector.dll" (
         echo   配置 pgvector 扩展...
+        set "PG_LIB_DIR=%INSTALLERS_DIR%\pgsql\lib"
+        set "PG_EXT_DIR=%INSTALLERS_DIR%\pgsql\share\extension"
         :: 复制 DLL 到 PostgreSQL lib 目录
-        for /f "delims=" %%i in ('where psql') do (
-            set "PSQL_PATH=%%~dpi"
-            set "PSQL_PATH=!PSQL_PATH:~0,-5!"
-        )
-        if exist "!PSQL_PATH!lib\" (
-            copy /Y "%INSTALLERS_DIR%\pgvector\vector.dll" "!PSQL_PATH!lib\" >nul 2>&1
+        if exist "!PG_LIB_DIR!\" (
+            copy /Y "%INSTALLERS_DIR%\pgvector\vector.dll" "!PG_LIB_DIR!\" >nul 2>&1
             echo   pgvector DLL 已复制到 PostgreSQL lib 目录
         )
-        :: 也复制 .control 和 .sql 文件
+        :: 复制 .control 和 .sql 文件到 extension 目录
         if exist "%INSTALLERS_DIR%\pgvector\vector.control" (
-            copy /Y "%INSTALLERS_DIR%\pgvector\vector.control" "!PSQL_PATH!share\extension\" >nul 2>&1
+            copy /Y "%INSTALLERS_DIR%\pgvector\vector.control" "!PG_EXT_DIR!\" >nul 2>&1
         )
         if exist "%INSTALLERS_DIR%\pgvector\*.sql" (
-            copy /Y "%INSTALLERS_DIR%\pgvector\*.sql" "!PSQL_PATH!share\extension\" >nul 2>&1
+            copy /Y "%INSTALLERS_DIR%\pgvector\*.sql" "!PG_EXT_DIR!\" >nul 2>&1
         )
     ) else (
         echo   [WARNING] pgvector 扩展未找到，请在 installers\pgvector\ 放置 pgvector 文件
@@ -222,9 +215,18 @@ where minio >nul 2>&1 && set "MINIO_INSTALLED=1"
 
 if %MINIO_INSTALLED% equ 0 (
     if exist "%INSTALLERS_DIR%\minio.exe" (
-        set "PATH=%INSTALLERS_DIR%;%PATH%"
-        set "MINIO_INSTALLED=1"
-        echo   使用便携版 MinIO
+        :: Check if minio.exe is a real binary (not a Git LFS pointer)
+        for %%f in ("%INSTALLERS_DIR%\minio.exe") do (
+            if %%~zf lss 1000 (
+                echo   [ERROR] minio.exe 是 Git LFS 指针文件！
+                echo   请先运行: git lfs pull
+                echo   或手动下载: https://dl.min.io/server/minio/release/windows-amd64/minio.exe
+            ) else (
+                set "PATH=%INSTALLERS_DIR%;%PATH%"
+                set "MINIO_INSTALLED=1"
+                echo   使用便携版 MinIO
+            )
+        )
     )
 )
 
@@ -264,6 +266,13 @@ if exist "node_modules.tar.gz.partaa" (
     if !errorlevel! equ 0 (
         set "ARCHIVE_EXTRACTED=1"
         echo   [OK] node_modules 解压完成
+        :: 修复 pnpm 符号链接 (分卷包中符号链接可能使用绝对路径)
+        echo   修复 pnpm 符号链接...
+        pnpm install --frozen-lockfile 2>nul
+        if !errorlevel! neq 0 (
+            echo   [INFO] 尝试非冻结模式修复...
+            pnpm install --no-frozen-lockfile 2>nul
+        )
     ) else (
         echo   [WARNING] 解压失败，尝试 pnpm install 方式...
     )
@@ -274,7 +283,7 @@ if %ARCHIVE_EXTRACTED% equ 0 (
         echo   node_modules 已存在，跳过安装
     ) else (
         echo   安装 npm 依赖 (首次可能需要较长时间)...
-        pnpm install --prefer-offline 2>&1 | findstr /V "Progress:"
+        pnpm install 2>&1 | findstr /V "Progress:"
         if !errorlevel! neq 0 (
             echo   [WARNING] pnpm install 可能未完全成功，尝试继续...
         )
@@ -284,6 +293,10 @@ if %ARCHIVE_EXTRACTED% equ 0 (
 :: 构建 SDK 包
 echo   构建 SDK 包...
 pnpm build:sdks 2>&1
+if !errorlevel! neq 0 (
+    echo   [WARNING] SDK 构建失败，可能需要 Node.js 22+ 版本
+    echo   尝试继续，FastGPT 可能仍可正常启动...
+)
 
 echo [OK] FastGPT 依赖安装完成
 echo.

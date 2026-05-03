@@ -1,5 +1,7 @@
 @echo off
 chcp 65001 >nul
+setlocal enabledelayedexpansion
+
 title FastGPT - 预检查工具
 
 echo.
@@ -18,10 +20,10 @@ set "ROOT=%ROOT:~0,-1%"
 :: =============================================================
 echo [1] 检查 Windows 端口保留范围...
 
-for %%p in (3000 3002 3004 3005) do (
+for %%p in (3000 4000 4004 27017 5432 6379 9000) do (
     netsh interface ipv4 show excludedportrange protocol=tcp 2>&1 | findstr "%%p" >nul
     if !errorlevel! equ 0 (
-        echo   [WARN] 端口 %%p 在 Windows 保留范围内，建议换用 4xxx
+        echo   [WARN] 端口 %%p 在 Windows 保留范围内
         set /a FAIL+=1
     )
 )
@@ -33,7 +35,7 @@ echo [2] 检查依赖文件完整性...
 :: 2. Check Node.js
 :: =============================================================
 where node >nul 2>&1
-if %errorlevel% neq 0 (
+if !errorlevel! neq 0 (
     echo   [FAIL] Node.js 未安装
     set /a FAIL+=1
 ) else (
@@ -45,7 +47,7 @@ if %errorlevel% neq 0 (
 :: 3. Check pnpm
 :: =============================================================
 where pnpm >nul 2>&1
-if %errorlevel% neq 0 (
+if !errorlevel! neq 0 (
     echo   [FAIL] pnpm 未安装
     set /a FAIL+=1
 ) else (
@@ -90,6 +92,17 @@ if exist "%ROOT%\installers\mongodb\bin\mongod.exe" (
     )
 )
 
+:: Check mongo shell (mongosh or legacy mongo)
+if exist "%ROOT%\installers\mongodb\bin\mongosh.exe" (
+    echo   [OK] mongosh 就绪
+) else (
+    if exist "%ROOT%\installers\mongodb\bin\mongo.exe" (
+        echo   [OK] mongo (legacy shell) 就绪
+    ) else (
+        echo   [WARN] MongoDB shell 未找到 - 副本集初始化可能失败
+    )
+)
+
 :: =============================================================
 :: 6. Check Redis
 :: =============================================================
@@ -110,9 +123,18 @@ if exist "%ROOT%\installers\redis\redis-server.exe" (
 :: =============================================================
 :: 7. Check MinIO
 :: =============================================================
-if exist "%ROOT%\installers%\minio.exe" (
-    echo   [OK] MinIO portable 就绪
-    set /a PASS+=1
+if exist "%ROOT%\installers\minio.exe" (
+    :: Check if minio.exe is a real binary (not a Git LFS pointer)
+    for %%f in ("%ROOT%\installers\minio.exe") do (
+        if %%~zf lss 1000 (
+            echo   [FAIL] minio.exe 是 Git LFS 指针文件，不是真实二进制
+            echo         请先运行: git lfs pull 或手动下载 MinIO
+            set /a FAIL+=1
+        ) else (
+            echo   [OK] MinIO portable 就绪
+            set /a PASS+=1
+        )
+    )
 ) else (
     where minio >nul 2>&1
     if !errorlevel! equ 0 (
@@ -153,8 +175,14 @@ if exist "%ROOT%\..\fastgpt-source\node_modules\.pnpm" (
     echo   [OK] node_modules 已安装
     set /a PASS+=1
 ) else (
-    echo   [WARN] node_modules 未安装，将尝试离线安装
-    set /a FAIL+=1
+    :: Check for split archive
+    if exist "%ROOT%\..\fastgpt-source\node_modules.tar.gz.partaa" (
+        echo   [INFO] node_modules 分卷压缩包存在，需要解压
+        set /a FAIL+=1
+    ) else (
+        echo   [WARN] node_modules 未安装，将尝试离线安装
+        set /a FAIL+=1
+    )
 )
 
 :: =============================================================
@@ -169,18 +197,28 @@ if exist "%ROOT%\scripts\mock-plugin-server.js" (
 )
 
 :: =============================================================
+:: 12. Check MongoDB keyFile (needed for auth + replica set)
+:: =============================================================
+if exist "%ROOT%\data\mongodb.key" (
+    echo   [OK] MongoDB keyFile 就绪
+    set /a PASS+=1
+) else (
+    echo   [INFO] MongoDB keyFile 未生成，首次启动时将自动生成
+)
+
+:: =============================================================
 :: Summary
 :: =============================================================
 echo.
 echo  ╔══════════════════════════════════════════════════╗
 echo  ║              预检查结果                          ║
 echo  ╠══════════════════════════════════════════════════╣
-echo  ║  通过: %PASS%  失败: %FAIL%                               ║
+echo  ║  通过: !PASS!  失败: !FAIL!                               ║
 echo  ╚══════════════════════════════════════════════════╝
 
-if %FAIL% gtr 0 (
+if !FAIL! gtr 0 (
     echo.
-    echo  [WARNING] 存在 %FAIL% 个问题，请先解决再运行 start.bat
+    echo  [WARNING] 存在 !FAIL! 个问题，请先解决再运行 start.bat
     echo  运行 setup.bat 可以自动修复部分问题
 ) else (
     echo.
