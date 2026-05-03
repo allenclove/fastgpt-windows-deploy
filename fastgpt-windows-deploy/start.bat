@@ -338,7 +338,7 @@ if %errorlevel% equ 0 (
     set "PLUGIN_PORT=4004"
 )
 
-start "FastGPT-MockPlugin" /MIN node "%FASTGPT_ROOT%\scripts\mock-plugin-server.js"
+start "FastGPT-MockPlugin" /MIN node "%FASTGPT_ROOT%\scripts\mock-plugin-server.js" !PLUGIN_PORT!
 timeout /t 2 >nul
 echo   Mock 插件服务已启动 (127.0.0.1:!PLUGIN_PORT!)
 

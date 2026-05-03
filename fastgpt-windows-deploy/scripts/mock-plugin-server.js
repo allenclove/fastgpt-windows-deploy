@@ -1,7 +1,7 @@
 // Minimal mock of FastGPT Plugin server for local development
 const http = require('http');
 
-const PORT = 4004;
+const PORT = parseInt(process.argv[2], 10) || 4004;
 
 const ok = (data) => ({ code: 0, data });
 

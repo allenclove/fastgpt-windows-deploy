@@ -7,4 +7,3 @@ fastgpt-windows-deploy/installers/pgsql/bin/*.dll filter=lfs diff=lfs merge=lfs 
 fastgpt-windows-deploy/installers/pgsql/lib/*.dll filter=lfs diff=lfs merge=lfs -text
 fastgpt-windows-deploy/installers/redis/*.exe filter=lfs diff=lfs merge=lfs -text
 fastgpt-windows-deploy/installers/pgvector/*.dll filter=lfs diff=lfs merge=lfs -text
-fastgpt-source/node_modules.tar.gz.part* filter=lfs diff=lfs merge=lfs -text

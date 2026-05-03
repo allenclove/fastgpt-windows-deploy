@@ -268,10 +268,10 @@ if exist "node_modules.tar.gz.partaa" (
         echo   [OK] node_modules 解压完成
         :: 修复 pnpm 符号链接 (分卷包中符号链接可能使用绝对路径)
         echo   修复 pnpm 符号链接...
-        pnpm install --frozen-lockfile 2>nul
+        pnpm install --frozen-lockfile --ignore-scripts 2>nul
         if !errorlevel! neq 0 (
             echo   [INFO] 尝试非冻结模式修复...
-            pnpm install --no-frozen-lockfile 2>nul
+            pnpm install --no-frozen-lockfile --ignore-scripts 2>nul
         )
     ) else (
         echo   [WARNING] 解压失败，尝试 pnpm install 方式...
@@ -283,19 +283,39 @@ if %ARCHIVE_EXTRACTED% equ 0 (
         echo   node_modules 已存在，跳过安装
     ) else (
         echo   安装 npm 依赖 (首次可能需要较长时间)...
-        pnpm install 2>&1 | findstr /V "Progress:"
+        pnpm install --ignore-scripts 2>&1
         if !errorlevel! neq 0 (
             echo   [WARNING] pnpm install 可能未完全成功，尝试继续...
         )
     )
 )
 
-:: 构建 SDK 包
-echo   构建 SDK 包...
-pnpm build:sdks 2>&1
-if !errorlevel! neq 0 (
-    echo   [WARNING] SDK 构建失败，可能需要 Node.js 22+ 版本
-    echo   尝试继续，FastGPT 可能仍可正常启动...
+:: 检查 SDK 是否已预构建 (dist 目录已提交到 git)
+set "SDK_BUILT=1"
+for %%s in (storage logger otel) do (
+    if not exist "%SOURCE_DIR%\sdk\%%s\dist\index.js" (
+        if not exist "%SOURCE_DIR%\sdk\%%s\dist\index.mjs" (
+            set "SDK_BUILT=0"
+        )
+    )
+)
+
+:: 构建 SDK 包 (仅在未预构建时)
+if %SDK_BUILT% equ 0 (
+    echo   构建 SDK 包...
+    pnpm build:sdks 2>&1
+    if !errorlevel! neq 0 (
+        echo   [WARNING] SDK 构建失败 (rolldown Windows 兼容性问题)
+        echo   尝试使用 --ignore-scripts 重新安装...
+        pnpm install --ignore-scripts 2>nul
+        pnpm build:sdks 2>&1
+        if !errorlevel! neq 0 (
+            echo   [ERROR] SDK 构建仍然失败，FastGPT 可能无法正常启动
+            echo   请确保 sdk/*/dist/ 目录已包含预构建文件
+        )
+    )
+) else (
+    echo   SDK 包已预构建，跳过构建步骤
 )
 
 echo [OK] FastGPT 依赖安装完成

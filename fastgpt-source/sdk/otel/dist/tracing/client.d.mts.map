@@ -1,0 +1,1 @@
+{"version":3,"file":"client.d.ts","sourceRoot":"","sources":["../../src/tracing/client.ts"],"names":[],"mappings":"AAUA,OAAO,KAAK,EAAE,uBAAuB,EAAkB,MAAM,SAAS,CAAC;AAiEvE,wBAAsB,gBAAgB,CAAC,OAAO,GAAE,uBAA4B,iBAqD3E;AAED,wBAAsB,cAAc,kBAuBnC;AAED,wBAAgB,SAAS,CAAC,IAAI,SAAoB,EAAE,OAAO,qBAAuB,uCAEjF;AAED,wBAAgB,qBAAqB,yDAEpC"}
