@@ -65,7 +65,7 @@ const nextConfig: NextConfig = {
       }
     }
   },
-  transpilePackages: ['@modelcontextprotocol/sdk', 'ahooks'],
+  transpilePackages: ['@modelcontextprotocol/sdk', 'ahooks', '@fastgpt-sdk/plugin'],
   serverExternalPackages: [
     '@node-rs/jieba',
     'bullmq',

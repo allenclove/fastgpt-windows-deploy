@@ -1,0 +1,76 @@
+diff --git a/dist/client.js b/dist/client.js
+index 7c55cd18b821d8e9cd2d79ac6acc37e5f3b37f8d..2d868fcc04b6b64d88c16aeed3bf91062a37f947 100644
+--- a/dist/client.js
++++ b/dist/client.js
+@@ -1,4 +1,4 @@
+-import { z, z as z$1 } from "zod";
++import { z } from "zod";
+ import { EventStreamContentType, fetchEventSource } from "@fortaine/fetch-event-source";
+ 
+ //#region rolldown:runtime
+@@ -1393,50 +1393,50 @@ var HonoRequest = class {
+ 
+ //#endregion
+ //#region ../node_modules/@hono/zod-openapi/dist/index.js
+-(0, import_dist.extendZodWithOpenApi)(z$1);
++(0, import_dist.extendZodWithOpenApi)(z);
+ 
+ //#endregion
+ //#region ../modules/tool/schemas/common.ts
+-const ToolDetailSchema = z$1.object(ToolDetailSchema$1.shape).openapi("ToolDetail");
+-const ToolSimpleSchema = z$1.object(ToolSimpleSchema$1.shape).openapi("ToolSimple");
+-const ToolTagListSchema = z$1.array(z$1.object({
+-	label: z$1.string(),
++const ToolDetailSchema = z.object(ToolDetailSchema$1.shape).openapi("ToolDetail");
++const ToolSimpleSchema = z.object(ToolSimpleSchema$1.shape).openapi("ToolSimple");
++const ToolTagListSchema = z.array(z.object({
++	label: z.string(),
+ 	value: ToolTagEnum
+ }));
+-const ToolIdParamSchema = z$1.object({ toolId: z$1.string().min(5).openapi({
++const ToolIdParamSchema = z.object({ toolId: z.string().min(5).openapi({
+ 	param: {
+ 		name: "toolId",
+ 		in: "path"
+ 	},
+ 	example: "doc2x"
+ }) });
+-const FilenameQuerySchema = z$1.object({ filename: z$1.string().min(1).openapi({
++const FilenameQuerySchema = z.object({ filename: z.string().min(1).openapi({
+ 	param: {
+ 		name: "filename",
+ 		in: "query"
+ 	},
+ 	example: "my-tool.zip"
+ }) });
+-const ObjectNameQuerySchema = z$1.object({ objectName: z$1.string().min(1).openapi({
++const ObjectNameQuerySchema = z.object({ objectName: z.string().min(1).openapi({
+ 	param: {
+ 		name: "objectName",
+ 		in: "query"
+ 	},
+ 	example: "tools/temp/my-tool.zip"
+ }) });
+-const ToolIdQuerySchema = z$1.object({ toolId: z$1.string().min(1).openapi({
++const ToolIdQuerySchema = z.object({ toolId: z.string().min(1).openapi({
+ 	param: {
+ 		name: "toolId",
+ 		in: "query"
+ 	},
+ 	example: "doc2x"
+ }) });
+-const ConfirmUploadBodySchema = z$1.object({ toolIds: z$1.array(z$1.string()).openapi({ example: ["tool1", "tool2"] }) });
+-const InstallToolBodySchema = z$1.object({ urls: z$1.array(z$1.url()).openapi({ example: ["https://example.com/tool.zip"] }) });
+-const RunStreamBodySchema = z$1.object({
+-	toolId: z$1.string().openapi({ example: "doc2x" }),
+-	inputs: z$1.record(z$1.string(), z$1.any()).openapi({ example: { text: "hello" } }),
+-	systemVar: z$1.any().optional()
++const ConfirmUploadBodySchema = z.object({ toolIds: z.array(z.string()).openapi({ example: ["tool1", "tool2"] }) });
++const InstallToolBodySchema = z.object({ urls: z.array(z.url()).openapi({ example: ["https://example.com/tool.zip"] }) });
++const RunStreamBodySchema = z.object({
++	toolId: z.string().openapi({ example: "doc2x" }),
++	inputs: z.record(z.string(), z.any()).openapi({ example: { text: "hello" } }),
++	systemVar: z.any().optional()
+ });
+ 
+ //#endregion
