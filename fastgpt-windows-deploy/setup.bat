@@ -253,7 +253,18 @@ if not exist "%SOURCE_DIR%" (
 
 :: 复制 .env 配置文件
 echo   配置环境变量...
-copy /Y "%FASTGPT_ROOT%\config\.env" "%SOURCE_DIR%\projects\app\.env" >nul
+if exist "%FASTGPT_ROOT%\config\.env" (
+    copy /Y "%FASTGPT_ROOT%\config\.env" "%SOURCE_DIR%\projects\app\.env" >nul
+    echo   .env 已复制到 projects\app\
+    echo.
+    echo   [重要] 请确认 config\.env 中的 AI 模型配置正确:
+    echo     OPENAI_BASE_URL  - 模型 API 端点
+    echo     CHAT_API_KEY     - API 密钥（Ollama 用 ollama）
+    echo     HELPER_BOT_MODEL - 模型名称（如 qwen2.5:7b）
+) else (
+    echo   [WARNING] config\.env 不存在！
+    echo   请创建 config\.env 文件后再运行 setup.bat
+)
 
 cd /d "%SOURCE_DIR%"
 
@@ -352,5 +363,10 @@ if %MINIO_INSTALLED% equ 1 (
 )
 echo.
 echo   下一步: 运行 start.bat 启动所有服务
+echo.
+echo   [内网 AI 模型配置]
+echo   启动后，需要在后台管理页面或 config\.env 中配置 AI 模型:
+echo     - 推荐 Ollama: OPENAI_BASE_URL=http://localhost:11434/v1
+echo     - 或 vLLM:    OPENAI_BASE_URL=http://内网IP:端口/v1
 echo.
 pause

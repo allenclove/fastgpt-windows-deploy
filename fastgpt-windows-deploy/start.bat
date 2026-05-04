@@ -356,12 +356,14 @@ echo [6/7] 检查数据库初始化状态...
 if not exist "%DATA_DIR%\.db_initialized" (
     echo   首次运行，执行数据库初始化...
 
-    :: 创建 MinIO buckets (如果 MinIO 已启动)
+    :: 创建 MinIO buckets (使用 Node.js MinIO 客户端，带认证)
     powershell -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 9000); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
     if !errorlevel! equ 0 (
         echo   创建 MinIO 存储桶...
-        curl -s -X PUT "http://127.0.0.1:9000/fastgpt-public" >nul 2>&1
-        curl -s -X PUT "http://127.0.0.1:9000/fastgpt-private" >nul 2>&1
+        node "%FASTGPT_ROOT%\scripts\init-minio-buckets.js"
+        if !errorlevel! neq 0 (
+            echo   [WARNING] MinIO 存储桶创建失败，FastGPT 文件存储可能不可用
+        )
     )
 
     echo   initialized > "%DATA_DIR%\.db_initialized"
@@ -407,6 +409,13 @@ echo.
 echo  [默认账号]
 echo    用户名: root
 echo    密码:   123456
+echo.
+echo  [重要提示]
+echo    首次访问页面需要 20-30 秒编译 (Turbopack instrumentation)
+echo    之后页面会快速加载。如果超时请刷新重试。
+echo.
+echo    启动完成后，在另一个终端运行以下命令做健康检查:
+echo      node scripts\health-check.js
 echo.
 echo  按 Ctrl+C 停止 FastGPT，然后运行 stop.bat 停止所有服务
 echo  ═══════════════════════════════════════════════════
