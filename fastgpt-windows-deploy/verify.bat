@@ -32,7 +32,29 @@ echo.
 echo [2] 检查依赖文件完整性...
 
 :: =============================================================
-:: 2. Check Node.js
+:: 2. Check essential system tools
+:: =============================================================
+where tar >nul 2>&1
+if !errorlevel! neq 0 (
+    echo   [FAIL] tar 命令不可用 - node_modules 解压需要
+    echo         请升级到 Windows 10 版本 1803 或更高
+    set /a FAIL+=1
+) else (
+    echo   [OK] tar 命令可用
+    set /a PASS+=1
+)
+
+where powershell >nul 2>&1
+if !errorlevel! neq 0 (
+    echo   [FAIL] PowerShell 不可用
+    set /a FAIL+=1
+) else (
+    echo   [OK] PowerShell 可用
+    set /a PASS+=1
+)
+
+:: =============================================================
+:: 3. Check Node.js
 :: =============================================================
 where node >nul 2>&1
 if !errorlevel! neq 0 (
@@ -208,6 +230,14 @@ if exist "%ROOT%\scripts\mock-plugin-server.js" (
     set /a FAIL+=1
 )
 
+if exist "%ROOT%\scripts\fix-pnpm-symlinks.js" (
+    echo   [OK] pnpm 符号链接修复脚本就绪
+    set /a PASS+=1
+) else (
+    echo   [WARN] pnpm 修复脚本缺失
+    set /a FAIL+=1
+)
+
 if exist "%ROOT%\scripts\init-minio-buckets.js" (
     echo   [OK] MinIO 存储桶初始化脚本就绪
     set /a PASS+=1
@@ -224,7 +254,41 @@ if exist "%ROOT%\scripts\health-check.js" (
 )
 
 :: =============================================================
-:: 13. Check MongoDB keyFile (needed for auth + replica set)
+:: 13. Check node_modules symlink health
+:: =============================================================
+set "NODE_MODULES=%ROOT%\..\fastgpt-source\node_modules"
+if exist "%NODE_MODULES%\.pnpm" (
+    echo   [OK] node_modules 虚拟存储就绪
+    set /a PASS+=1
+
+    :: Quick spot-check: verify a few key packages are accessible
+    set "SYMLINK_OK=1"
+    for %%p in (next react axios typescript) do (
+        if not exist "%NODE_MODULES%\%%p" (
+            if not exist "%NODE_MODULES%\%%p\package.json" (
+                if not exist "%NODE_MODULES%\%%p\index.js" (
+                    if not exist "%NODE_MODULES%\%%p\index.mjs" (
+                        set "SYMLINK_OK=0"
+                    )
+                )
+            )
+        )
+    )
+    if !SYMLINK_OK! equ 1 (
+        echo   [OK] 关键包符号链接正常
+    ) else (
+        echo   [FAIL] 关键包符号链接断裂！
+        echo         请运行: node scripts\fix-pnpm-symlinks.js
+        echo         或执行: setup.bat 重新修复
+        set /a FAIL+=1
+    )
+) else (
+    echo   [WARN] node_modules 未安装或结构异常
+    set /a FAIL+=1
+)
+
+:: =============================================================
+:: 14. Check MongoDB keyFile (needed for auth + replica set)
 :: =============================================================
 if exist "%ROOT%\data\mongodb.key" (
     echo   [OK] MongoDB keyFile 就绪

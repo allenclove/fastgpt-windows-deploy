@@ -273,30 +273,53 @@ set "ARCHIVE_EXTRACTED=0"
 if exist "node_modules.tar.gz.partaa" (
     echo   检测到离线 node_modules 分卷压缩包，正在合并解压...
     echo   这可能需要几分钟时间...
-    cat node_modules.tar.gz.part* | tar -xzf - 2>&1
+    :: Windows cmd.exe 没有 cat 命令，使用 copy /b 合并分卷
+    echo   合并分卷文件...
+    copy /b node_modules.tar.gz.partaa+node_modules.tar.gz.partab+node_modules.tar.gz.partac+node_modules.tar.gz.partad node_modules.tar.gz >nul 2>&1
+    if !errorlevel! neq 0 (
+        :: 如果 copy /b 失败，尝试使用 PowerShell
+        powershell -Command "Get-Content node_modules.tar.gz.part* -Raw | Set-Content node_modules.tar.gz -Encoding Byte" >nul 2>&1
+    )
+    echo   解压 node_modules...
+    tar -xzf node_modules.tar.gz 2>&1
+    if exist "node_modules.tar.gz" del node_modules.tar.gz
     if !errorlevel! equ 0 (
         set "ARCHIVE_EXTRACTED=1"
         echo   [OK] node_modules 解压完成
-        :: 修复 pnpm 符号链接 (分卷包中符号链接可能使用绝对路径)
-        echo   修复 pnpm 符号链接...
-        pnpm install --frozen-lockfile --ignore-scripts 2>nul
-        if !errorlevel! neq 0 (
-            echo   [INFO] 尝试非冻结模式修复...
-            pnpm install --no-frozen-lockfile --ignore-scripts 2>nul
-        )
     ) else (
         echo   [WARNING] 解压失败，尝试 pnpm install 方式...
     )
 )
 
-if %ARCHIVE_EXTRACTED% equ 0 (
+if %ARCHIVE_EXTRACTED% equ 1 (
+    :: 修复 pnpm 符号链接
+    :: 内网环境下 pnpm install --frozen-lockfile 会因无法联网而失败
+    :: 改用本地修复脚本，直接基于 .pnpm 虚拟存储重建所有符号链接
+    echo   修复 pnpm 符号链接 (内网离线模式)...
+    node "%FASTGPT_ROOT%\scripts\fix-pnpm-symlinks.js"
+    if !errorlevel! neq 0 (
+        echo   [WARNING] 符号链接修复失败
+        echo   尝试 pnpm install --frozen-lockfile --ignore-scripts...
+        pnpm install --frozen-lockfile --ignore-scripts 2>nul
+        if !errorlevel! neq 0 (
+            echo   [WARNING] pnpm 修复也失败了
+            echo   请以管理员身份运行 setup.bat 以启用符号链接权限
+        )
+    )
+) else (
     if exist "node_modules\.pnpm" (
-        echo   node_modules 已存在，跳过安装
+        echo   node_modules 已存在，验证符号链接健康...
+        node "%FASTGPT_ROOT%\scripts\fix-pnpm-symlinks.js"
+        if !errorlevel! neq 0 (
+            echo   [INFO] 符号链接存在部分问题，已尝试修复
+        )
     ) else (
         echo   安装 npm 依赖 (首次可能需要较长时间)...
+        echo   [INFO] 如在内网环境，请确保 node_modules.tar.gz 分卷压缩包存在
         pnpm install --ignore-scripts 2>&1
         if !errorlevel! neq 0 (
-            echo   [WARNING] pnpm install 可能未完全成功，尝试继续...
+            echo   [WARNING] pnpm install 失败 - 内网环境可能无法下载
+            echo   请在有网环境运行 pnpm install 后，用 bundle-offline.bat 打包
         )
     )
 )
