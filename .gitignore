@@ -24,3 +24,4 @@ Desktop.ini
 # Debug symbol files
 *.pdb
 .claude/
+fastgpt-windows-deploy/installers/minio.exe

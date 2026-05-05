@@ -149,23 +149,40 @@ if exist "%ROOT%\installers\minio.exe" (
     :: Check if minio.exe is a real binary (not a Git LFS pointer)
     for %%f in ("%ROOT%\installers\minio.exe") do (
         if %%~zf lss 1000 (
-            echo   [FAIL] minio.exe 是 Git LFS 指针文件，不是真实二进制
-            echo         请先运行: git lfs pull 或手动下载 MinIO
-            set /a FAIL+=1
+            echo   [INFO] minio.exe 是 Git LFS 指针，将从分卷自动组装
         ) else (
             echo   [OK] MinIO portable 就绪
             set /a PASS+=1
         )
     )
 ) else (
-    where minio >nul 2>&1
-    if !errorlevel! equ 0 (
-        echo   [OK] MinIO 已安装 (系统级)
-        set /a PASS+=1
+    :: minio.exe 不存在，检查分卷
+    if exist "%ROOT%\installers\minio.exe.partaa" (
+        echo   [INFO] minio.exe 不存在，但分卷文件就绪，setup.bat 将自动组装
     ) else (
-        echo   [WARN] MinIO 未找到
-        set /a FAIL+=1
+        where minio >nul 2>&1
+        if !errorlevel! equ 0 (
+            echo   [OK] MinIO 已安装 (系统级)
+            set /a PASS+=1
+        ) else (
+            echo   [WARN] MinIO 未找到
+            set /a FAIL+=1
+        )
     )
+)
+
+:: Check MinIO part files
+if exist "%ROOT%\installers\minio.exe.partaa" (
+    echo   [OK] MinIO 分卷 partaa 就绪
+    set /a PASS+=1
+)
+if exist "%ROOT%\installers\minio.exe.partab" (
+    echo   [OK] MinIO 分卷 partab 就绪
+    set /a PASS+=1
+)
+if exist "%ROOT%\installers\minio.exe.partac" (
+    echo   [OK] MinIO 分卷 partac 就绪
+    set /a PASS+=1
 )
 
 :: =============================================================

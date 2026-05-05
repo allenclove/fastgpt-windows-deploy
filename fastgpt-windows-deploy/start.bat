@@ -292,15 +292,29 @@ where minio >nul 2>&1 && for /f "delims=" %%i in ('where minio') do set "MINIO_P
 
 if not defined MINIO_PATH (
     if exist "%INSTALLERS_DIR%\minio.exe" (
-        :: Check if minio.exe is a real binary (not a Git LFS pointer)
         for %%f in ("%INSTALLERS_DIR%\minio.exe") do (
             if %%~zf lss 1000 (
-                echo   [ERROR] minio.exe 是 Git LFS 指针文件，无法启动
-                echo   请先运行: git lfs pull 或手动下载 MinIO
-                goto :minio_done
+                echo   [INFO] minio.exe 是 LFS 指针，尝试从分卷组装...
+                copy /b "%INSTALLERS_DIR%\minio.exe.partaa"+"%INSTALLERS_DIR%\minio.exe.partab"+"%INSTALLERS_DIR%\minio.exe.partac" "%INSTALLERS_DIR%\minio.exe" >nul 2>&1
+                if !errorlevel! equ 0 (
+                    for %%g in ("%INSTALLERS_DIR%\minio.exe") do (
+                        if %%~zg gtr 1048576 (
+                            set "MINIO_PATH=%INSTALLERS_DIR%\minio.exe"
+                            echo   [OK] MinIO 组装完成
+                        )
+                    )
+                )
             ) else (
                 set "MINIO_PATH=%INSTALLERS_DIR%\minio.exe"
             )
+        )
+    )
+    :: If still not found, try assembling from parts
+    if not defined MINIO_PATH (
+        if exist "%INSTALLERS_DIR%\minio.exe.partaa" (
+            echo   从分卷组装 MinIO...
+            copy /b "%INSTALLERS_DIR%\minio.exe.partaa"+"%INSTALLERS_DIR%\minio.exe.partab"+"%INSTALLERS_DIR%\minio.exe.partac" "%INSTALLERS_DIR%\minio.exe" >nul 2>&1
+            if exist "%INSTALLERS_DIR%\minio.exe" set "MINIO_PATH=%INSTALLERS_DIR%\minio.exe"
         )
     )
 )

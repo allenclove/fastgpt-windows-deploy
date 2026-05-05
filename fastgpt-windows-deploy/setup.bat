@@ -215,25 +215,50 @@ where minio >nul 2>&1 && set "MINIO_INSTALLED=1"
 
 if %MINIO_INSTALLED% equ 0 (
     if exist "%INSTALLERS_DIR%\minio.exe" (
-        :: Check if minio.exe is a real binary (not a Git LFS pointer)
+        :: Check if minio.exe is a real binary (>1MB) or a Git LFS pointer (<1KB)
         for %%f in ("%INSTALLERS_DIR%\minio.exe") do (
             if %%~zf lss 1000 (
-                echo   [ERROR] minio.exe 是 Git LFS 指针文件！
-                echo   请先运行: git lfs pull
-                echo   或手动下载: https://dl.min.io/server/minio/release/windows-amd64/minio.exe
+                echo   [ERROR] minio.exe 是 Git LFS 指针文件 (%%~zf bytes^)！
+                echo   正在从分卷重新组装...
+                goto :assemble_minio
             ) else (
                 set "PATH=%INSTALLERS_DIR%;%PATH%"
                 set "MINIO_INSTALLED=1"
                 echo   使用便携版 MinIO
             )
         )
+    ) else (
+        :: minio.exe 不存在，尝试从分卷组装
+        goto :assemble_minio
     )
+    goto :minio_done
 )
 
+:assemble_minio
+if exist "%INSTALLERS_DIR%\minio.exe.partaa" (
+    echo   检测到 MinIO 分卷文件，正在组装...
+    copy /b "%INSTALLERS_DIR%\minio.exe.partaa"+"%INSTALLERS_DIR%\minio.exe.partab"+"%INSTALLERS_DIR%\minio.exe.partac" "%INSTALLERS_DIR%\minio.exe" >nul 2>&1
+    if !errorlevel! equ 0 (
+        for %%f in ("%INSTALLERS_DIR%\minio.exe") do (
+            if %%~zf gtr 1048576 (
+                set "PATH=%INSTALLERS_DIR%;%PATH%"
+                set "MINIO_INSTALLED=1"
+                echo   [OK] MinIO 组装完成 (%%~zf bytes^)
+            )
+        )
+    )
+) else (
+    echo   [WARNING] MinIO 分卷文件不存在！
+)
+
+:minio_done
 if %MINIO_INSTALLED% equ 0 (
-    echo [WARNING] MinIO 未找到！
-    echo   下载 MinIO Windows 版: https://dl.min.io/server/minio/release/windows-amd64/minio.exe
-    echo   将 minio.exe 放入 installers\ 目录
+    echo [WARNING] MinIO 未找到且无法组装！
+    echo   请确保 installers\ 中存在以下分卷文件:
+    echo     minio.exe.partaa, minio.exe.partab, minio.exe.partac
+    echo.
+    echo   或手动下载 MinIO Windows 版放入 installers\:
+    echo     https://dl.min.io/server/minio/release/windows-amd64/minio.exe
     echo.
     echo   注意: MinIO 用于文件存储，如仅测试可暂时跳过
 )
